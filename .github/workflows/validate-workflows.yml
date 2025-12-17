@@ -23,5 +23,12 @@ jobs:
       - name: Validate workflow YAML files
         run: |
           set -e
+          echo "Looking for workflow files in .github/workflows"
+          shopt -s nullglob || true
+          files=(.github/workflows/*.yml .github/workflows/*.yaml)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No workflow files found"
+            exit 0
+          fi
           echo "Validating workflow files with scripts/validate_yaml.py"
           python scripts/validate_yaml.py .github/workflows
