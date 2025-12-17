@@ -158,16 +158,25 @@ class _AccountScreenState extends State<AccountScreen> {
             },
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _cityCtrl,
-            decoration: const InputDecoration(labelText: 'City'),
-            onSubmitted: (v) => AuthService.instance.setCity(v.trim()),
+          ValueListenableBuilder<bool>(
+            valueListenable: AuthService.instance.signedIn,
+            builder: (context, signedIn, _) {
+              if (!signedIn) return const SizedBox.shrink();
+              return TextField(
+                controller: _cityCtrl,
+                decoration: const InputDecoration(labelText: 'City'),
+                onSubmitted: (v) => AuthService.instance.setCity(v.trim()),
+              );
+            },
           ),
           const SizedBox(height: 8),
           ElevatedButton(
             onPressed: () async {
               await AuthService.instance.setDisplayName(_nameCtrl.text);
-              await AuthService.instance.setCity(_cityCtrl.text.trim());
+              // only persist city when user is signed in
+              if (AuthService.instance.signedIn.value) {
+                await AuthService.instance.setCity(_cityCtrl.text.trim());
+              }
               // reflect sanitized name back into the text field
               _nameCtrl.text = AuthService.instance.displayName.value;
               if (!mounted) return;
