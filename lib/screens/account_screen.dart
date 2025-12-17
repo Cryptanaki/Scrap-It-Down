@@ -166,21 +166,6 @@ class _AccountScreenState extends State<AccountScreen> {
           const SizedBox(height: 8),
           ElevatedButton(
             onPressed: () async {
-              // toggle sign-in for demo purposes
-              final signedIn = AuthService.instance.signedIn.value;
-              if (signedIn) {
-                await AuthService.instance.signOut();
-              } else {
-                await AuthService.instance.signInAnonymously();
-              }
-              if (!mounted) return;
-              setState(() {});
-            },
-            child: const Text('Toggle Sign-in'),
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: () async {
               await AuthService.instance.setDisplayName(_nameCtrl.text);
               await AuthService.instance.setCity(_cityCtrl.text.trim());
               // reflect sanitized name back into the text field
