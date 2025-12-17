@@ -170,19 +170,25 @@ class _AccountScreenState extends State<AccountScreen> {
             },
           ),
           const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: () async {
-              await AuthService.instance.setDisplayName(_nameCtrl.text);
-              // only persist city when user is signed in
-              if (AuthService.instance.signedIn.value) {
-                await AuthService.instance.setCity(_cityCtrl.text.trim());
-              }
-              // reflect sanitized name back into the text field
-              _nameCtrl.text = AuthService.instance.displayName.value;
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved')));
+          ValueListenableBuilder<bool>(
+            valueListenable: AuthService.instance.signedIn,
+            builder: (context, signedIn, _) {
+              if (!signedIn) return const SizedBox.shrink();
+              return ElevatedButton(
+                onPressed: () async {
+                  await AuthService.instance.setDisplayName(_nameCtrl.text);
+                  // only persist city when user is signed in
+                  if (AuthService.instance.signedIn.value) {
+                    await AuthService.instance.setCity(_cityCtrl.text.trim());
+                  }
+                  // reflect sanitized name back into the text field
+                  _nameCtrl.text = AuthService.instance.displayName.value;
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved')));
+                },
+                child: const Text('Save Profile'),
+              );
             },
-            child: const Text('Save Profile'),
           ),
         ],
       ),
