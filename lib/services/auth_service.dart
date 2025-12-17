@@ -44,10 +44,13 @@ class AuthService {
   }
 
   Future<void> setDisplayName(String name) async {
-    displayName.value = name;
+    // remove whitespace and ensure an '@' prefix for non-empty names
+    final sanitized = name.replaceAll(RegExp(r"\s+"), '');
+    final finalName = sanitized.isEmpty ? '' : (sanitized.startsWith('@') ? sanitized : '@$sanitized');
+    displayName.value = finalName;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('display_name', name);
+      await prefs.setString('display_name', finalName);
     } catch (e) {
       debugPrint('Failed to persist display name: $e');
     }

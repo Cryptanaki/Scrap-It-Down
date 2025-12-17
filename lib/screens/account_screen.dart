@@ -58,7 +58,10 @@ class _AccountScreenState extends State<AccountScreen> {
           TextField(
             controller: _nameCtrl,
             decoration: const InputDecoration(labelText: 'Display name'),
-            onSubmitted: (v) => AuthService.instance.setDisplayName(v.trim()),
+            onSubmitted: (v) async {
+              await AuthService.instance.setDisplayName(v);
+              _nameCtrl.text = AuthService.instance.displayName.value;
+            },
           ),
           const SizedBox(height: 12),
           TextField(
@@ -84,8 +87,10 @@ class _AccountScreenState extends State<AccountScreen> {
           const SizedBox(height: 8),
           ElevatedButton(
             onPressed: () async {
-              await AuthService.instance.setDisplayName(_nameCtrl.text.trim());
+              await AuthService.instance.setDisplayName(_nameCtrl.text);
               await AuthService.instance.setCity(_cityCtrl.text.trim());
+              // reflect sanitized name back into the text field
+              _nameCtrl.text = AuthService.instance.displayName.value;
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved')));
             },
