@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:scrap_it_down/services/services.dart';
 import 'package:scrap_it_down/models/post.dart';
-import 'create_post_screen.dart';
 import 'post_social_screen.dart';
 
 class DetailsScreen extends StatefulWidget {
@@ -15,16 +14,24 @@ class DetailsScreen extends StatefulWidget {
 
 class _DetailsScreenState extends State<DetailsScreen> {
   late final TextEditingController _socialInputCtrl;
+  late final ScrollController _listController;
+  final Set<String> _replying = <String>{};
+  final Map<String, TextEditingController> _replyCtrls = {};
   @override
   void initState() {
     super.initState();
     PostService.instance.init();
     _socialInputCtrl = TextEditingController();
+    _listController = ScrollController();
   }
 
   @override
   void dispose() {
     _socialInputCtrl.dispose();
+    _listController.dispose();
+    for (final c in _replyCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -33,7 +40,6 @@ class _DetailsScreenState extends State<DetailsScreen> {
     final category = widget.title ?? 'Social';
     // Display title for the Social tab should read "Scrap Recovery Forms"
     final displayTitle = widget.title ?? 'Scrap Recovery Forms';
-    final isScrap = category.toLowerCase().contains('scrap');
 
     return Scaffold(
       appBar: AppBar(title: Text(displayTitle)),
@@ -70,251 +76,154 @@ class _DetailsScreenState extends State<DetailsScreen> {
             });
           final posts = [...cityPosts, ...top3, ...newPosts, ...others];
 
+          Widget buildPostItem(Post p) {
+            // build top comments preview sorted by net score
+            final comments = List.of(p.comments)
+              ..sort((a, b) {
+                final netA = a.upvotedBy.length - a.downvotedBy.length;
+                final netB = b.upvotedBy.length - b.downvotedBy.length;
+                if (netB != netA) return netB.compareTo(netA);
+                return b.createdAt.compareTo(a.createdAt);
+              });
+            final preview = comments.take(3).toList();
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  leading: CircleAvatar(
+                    backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(26),
+                    child: (p.category.toLowerCase().contains('scrap') || p.category.toLowerCase().contains('metal'))
+                        ? const Icon(Icons.recycling, color: Colors.white)
+                        : const Icon(Icons.sell, color: Colors.white),
+                  ),
+                  title: Row(children: [
+                    Expanded(child: Text(p.title, style: const TextStyle(fontWeight: FontWeight.w600))),
+                    if (now.difference(p.createdAt) < const Duration(hours: 24))
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8.0),
+                        child: Chip(label: Text('NEW'), backgroundColor: Colors.black, labelStyle: TextStyle(color: Colors.white, fontSize: 12)),
+                      ),
+                  ]),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (p.imagePath != null) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Image.file(File(p.imagePath!), height: 160, width: double.infinity, fit: BoxFit.cover),
+                        ),
+                      ],
+                      Text(p.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 6),
+                      Text(_formatRelative(p.createdAt), style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostSocialScreen(postId: p.id))),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      for (final c in preview)
+                        ListTile(
+                          dense: true,
+                          title: Text(c.author, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          subtitle: Text(c.text, style: const TextStyle(fontSize: 13)),
+                          trailing: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ValueListenableBuilder<bool>(
+                                valueListenable: AuthService.instance.signedIn,
+                                builder: (context, signedIn, _) {
+                                  final me = AuthService.instance.displayName.value;
+                                  final upvoted = c.upvotedBy.contains(me);
+                                  final downvoted = c.downvotedBy.contains(me);
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.arrow_upward, color: upvoted ? Colors.green : null),
+                                        iconSize: 18,
+                                        onPressed: signedIn
+                                            ? () async {
+                                                final user = me.isNotEmpty ? me : 'Anonymous';
+                                                await PostService.instance.toggleUpvoteComment(p.id, c.id, user);
+                                                setState(() {});
+                                              }
+                                            : null,
+                                      ),
+                                      Text('${c.upvotedBy.length - c.downvotedBy.length}', style: const TextStyle(fontSize: 12)),
+                                      IconButton(
+                                        icon: Icon(Icons.arrow_downward, color: downvoted ? Colors.red : null),
+                                        iconSize: 18,
+                                        onPressed: signedIn
+                                            ? () async {
+                                                final user = me.isNotEmpty ? me : 'Anonymous';
+                                                await PostService.instance.toggleDownvoteComment(p.id, c.id, user);
+                                                setState(() {});
+                                              }
+                                            : null,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Reply toggle
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () {
+                            if (!AuthService.instance.signedIn.value) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in to reply')));
+                              return;
+                            }
+                            setState(() => _replying.add(p.id));
+                          },
+                          icon: const Icon(Icons.reply, size: 14),
+                          label: const Text('Reply', style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+
+                      if (_replying.contains(p.id))
+                        Row(children: [
+                          Expanded(child: TextField(controller: _replyCtrls.putIfAbsent(p.id, () => TextEditingController()), decoration: const InputDecoration(hintText: 'Write a reply'))),
+                          IconButton(
+                            icon: const Icon(Icons.send),
+                            onPressed: () async {
+                              final text = _replyCtrls[p.id]?.text.trim() ?? '';
+                              if (text.isEmpty) return;
+                              final author = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                              await PostService.instance.addComment(p.id, author, text);
+                              _replyCtrls[p.id]?.clear();
+                              setState(() {
+                                _replying.remove(p.id);
+                              });
+                            },
+                          )
+                        ])
+                      else
+                        const SizedBox.shrink(),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+
           final listView = ListView.separated(
+            controller: _listController,
             itemCount: posts.length,
             separatorBuilder: (context, index) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final p = posts[index];
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(26),
-                  child: (p.category.toLowerCase().contains('scrap') || p.category.toLowerCase().contains('metal'))
-                      ? const Icon(Icons.recycling, color: Colors.white)
-                      : const Icon(Icons.sell, color: Colors.white),
-                ),
-                title: Row(children: [
-                  Expanded(child: Text(p.title, style: const TextStyle(fontWeight: FontWeight.w600))),
-                  if (now.difference(p.createdAt) < const Duration(hours: 24))
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8.0),
-                      child: Chip(label: Text('NEW'), backgroundColor: Colors.black, labelStyle: TextStyle(color: Colors.white, fontSize: 12)),
-                    ),
-                ]),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (p.imagePath != null) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Image.file(File(p.imagePath!), height: 160, width: double.infinity, fit: BoxFit.cover),
-                      ),
-                    ],
-                    Text(p.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 6),
-                    Text(_formatRelative(p.createdAt), style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-                onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostSocialScreen(postId: p.id)));
-                },
-                trailing: category.toLowerCase().contains('social')
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Compact voting controls (only for Social)
-                          IconButton(
-                            icon: Icon(Icons.arrow_upward, color: p.upvotedBy.contains(AuthService.instance.displayName.value) ? Colors.green : null),
-                            onPressed: () async {
-                              final user = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                              await PostService.instance.toggleUpvotePost(p.id, user);
-                              setState(() {});
-                            },
-                            iconSize: 20,
-                          ),
-                          Text('${p.upvotedBy.length - p.downvotedBy.length}', style: const TextStyle(fontSize: 12)),
-                          IconButton(
-                            icon: Icon(Icons.arrow_downward, color: p.downvotedBy.contains(AuthService.instance.displayName.value) ? Colors.red : null),
-                            onPressed: () async {
-                              final user = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                              await PostService.instance.toggleDownvotePost(p.id, user);
-                              setState(() {});
-                            },
-                            iconSize: 20,
-                          ),
-                          PopupMenuButton<String>(
-                            onSelected: (v) async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              final navigator = Navigator.of(context);
-                              if (v == 'edit') {
-                                await navigator.push(MaterialPageRoute(
-                                  builder: (_) => CreatePostScreen(category: category, priceAllowed: !isScrap, editPostId: p.id),
-                                ));
-                                if (!mounted) return;
-                                setState(() {});
-                              } else if (v == 'delete') {
-                                await PostService.instance.removePost(p.id);
-                                if (!mounted) return;
-                                messenger.showSnackBar(const SnackBar(content: Text('Post deleted')));
-                                setState(() {});
-                              } else if (v == 'reserve') {
-                                final buyer = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                                await PostService.instance.reservePost(p.id, buyer);
-                                if (!mounted) return;
-                                messenger.showSnackBar(const SnackBar(content: Text('Post reserved')));
-                                setState(() {});
-                              } else if (v == 'start_meetup') {
-                                // Ask for duration
-                                final dur = await showDialog<int>(context: context, builder: (ctx) {
-                                  final ctrl = TextEditingController(text: '900');
-                                  return AlertDialog(
-                                    title: const Text('Meetup duration (seconds)'),
-                                    content: TextField(controller: ctrl, keyboardType: TextInputType.number),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int?>(null), child: const Text('Cancel')),
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int>(int.tryParse(ctrl.text) ?? 900), child: const Text('Start')),
-                                    ],
-                                  );
-                                });
-                                if (dur != null) {
-                                  await PostService.instance.startMeetup(p.id, dur);
-                                  if (!mounted) return;
-                                  messenger.showSnackBar(const SnackBar(content: Text('Meetup started')));
-                                  setState(() {});
-                                }
-                              } else if (v == 'mark_picked') {
-                                // Offer seller forgiveness option
-                                final forgive = await showDialog<bool>(context: context, builder: (ctx) {
-                                  return AlertDialog(
-                                    title: const Text('Seller forgave late pickup?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(false), child: const Text('No')),
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(true), child: const Text('Yes')),
-                                    ],
-                                  );
-                                });
-                                await PostService.instance.markPickedUp(p.id, sellerForgave: forgive ?? false);
-                                if (!mounted) return;
-                                messenger.showSnackBar(const SnackBar(content: Text('Marked picked up')));
-                                setState(() {});
-                              }
-                            },
-                            itemBuilder: (_) {
-                              final me = AuthService.instance.displayName.value;
-                              final isSeller = me.isNotEmpty && me == p.sellerName;
-                              final items = <PopupMenuEntry<String>>[];
-                              items.add(const PopupMenuItem(value: 'edit', child: Text('Edit')));
-                              items.add(const PopupMenuItem(value: 'delete', child: Text('Delete')));
-                              if (p.status == 'available') items.add(const PopupMenuItem(value: 'reserve', child: Text('Reserve')));
-                              items.add(const PopupMenuItem(value: 'message', child: Text('Message seller')));
-                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'start_meetup', child: Text('Start Meetup')));
-                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'mark_picked', child: Text('Mark Picked Up')));
-                              return items;
-                            },
-                          ),
-                        ],
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          p.isFree
-                              ? Chip(label: const Text('Free'), backgroundColor: Colors.black, labelStyle: const TextStyle(color: Colors.white))
-                              : Chip(label: Text('\$${p.price?.toStringAsFixed(2) ?? '-'}'), backgroundColor: Colors.black, labelStyle: const TextStyle(color: Colors.white)),
-                          const SizedBox(height: 8),
-                          PopupMenuButton<String>(
-                            onSelected: (v) async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              final navigator = Navigator.of(context);
-                              if (v == 'edit') {
-                                await navigator.push(MaterialPageRoute(
-                                  builder: (_) => CreatePostScreen(category: category, priceAllowed: !isScrap, editPostId: p.id),
-                                ));
-                                if (!mounted) return;
-                                setState(() {});
-                              } else if (v == 'delete') {
-                                await PostService.instance.removePost(p.id);
-                                if (!mounted) return;
-                                messenger.showSnackBar(const SnackBar(content: Text('Post deleted')));
-                                setState(() {});
-                              } else if (v == 'reserve') {
-                                final buyer = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                                await PostService.instance.reservePost(p.id, buyer);
-                                // send a private message to the seller notifying reservation
-                                final msg = Message(
-                                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                  from: buyer,
-                                  to: p.sellerName,
-                                  content: '$buyer reserved your item "${p.title}"',
-                                );
-                                MessagesService.instance.addMessage(msg);
-                                if (!mounted) return;
-                                messenger.showSnackBar(const SnackBar(content: Text('Post reserved')));
-                                setState(() {});
-                              } else if (v == 'message') {
-                                // compose a private message to seller
-                                final controller = TextEditingController();
-                                final sent = await showDialog<bool>(context: context, builder: (ctx) {
-                                  return AlertDialog(
-                                    title: Text('Message ${p.sellerName}'),
-                                    content: TextField(controller: controller, maxLines: 4, decoration: const InputDecoration(hintText: 'Enter message')),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(false), child: const Text('Cancel')),
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(true), child: const Text('Send')),
-                                    ],
-                                  );
-                                });
-                                if (sent == true && controller.text.trim().isNotEmpty) {
-                                  final from = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                                  final m = Message(
-                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                    from: from,
-                                    to: p.sellerName,
-                                    content: controller.text.trim(),
-                                  );
-                                  MessagesService.instance.addMessage(m);
-                                  if (!mounted) return;
-                                  messenger.showSnackBar(const SnackBar(content: Text('Message sent')));
-                                  setState(() {});
-                                }
-                              } else if (v == 'start_meetup') {
-                                final dur = await showDialog<int>(context: context, builder: (ctx) {
-                                  final ctrl = TextEditingController(text: '900');
-                                  return AlertDialog(
-                                    title: const Text('Meetup duration (seconds)'),
-                                    content: TextField(controller: ctrl, keyboardType: TextInputType.number),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int?>(null), child: const Text('Cancel')),
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int>(int.tryParse(ctrl.text) ?? 900), child: const Text('Start')),
-                                    ],
-                                  );
-                                });
-                                if (dur != null) {
-                                  await PostService.instance.startMeetup(p.id, dur);
-                                  if (!mounted) return;
-                                  messenger.showSnackBar(const SnackBar(content: Text('Meetup started')));
-                                  setState(() {});
-                                }
-                              } else if (v == 'mark_picked') {
-                                final forgive = await showDialog<bool>(context: context, builder: (ctx) {
-                                  return AlertDialog(
-                                    title: const Text('Seller forgave late pickup?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(false), child: const Text('No')),
-                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(true), child: const Text('Yes')),
-                                    ],
-                                  );
-                                });
-                                await PostService.instance.markPickedUp(p.id, sellerForgave: forgive ?? false);
-                                if (!mounted) return;
-                                messenger.showSnackBar(const SnackBar(content: Text('Marked picked up')));
-                                setState(() {});
-                              }
-                            },
-                            itemBuilder: (_) {
-                              final me = AuthService.instance.displayName.value;
-                              final isSeller = me.isNotEmpty && me == p.sellerName;
-                              final items = <PopupMenuEntry<String>>[];
-                              items.add(const PopupMenuItem(value: 'edit', child: Text('Edit')));
-                              items.add(const PopupMenuItem(value: 'delete', child: Text('Delete')));
-                              if (p.status == 'available') items.add(const PopupMenuItem(value: 'reserve', child: Text('Reserve')));
-                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'start_meetup', child: Text('Start Meetup')));
-                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'mark_picked', child: Text('Mark Picked Up')));
-                              return items;
-                            },
-                          ),
-                        ],
-                      ),
-              );
+              return buildPostItem(p);
             },
           );
 
@@ -325,23 +234,37 @@ class _DetailsScreenState extends State<DetailsScreen> {
                   padding: const EdgeInsets.all(8.0),
                   child: Row(children: [
                     Expanded(child: TextField(controller: _socialInputCtrl, decoration: const InputDecoration(hintText: 'Whats on your mind?'))),
-                    IconButton(
-                      icon: const Icon(Icons.send),
-                      onPressed: () async {
-                        final text = _socialInputCtrl.text.trim();
-                        if (text.isEmpty) return;
-                        final author = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                        final post = Post(
-                          id: DateTime.now().millisecondsSinceEpoch.toString(),
-                          category: category,
-                          title: text.length > 40 ? '${text.substring(0, 40)}...' : text,
-                          description: text,
-                          isFree: true,
-                          sellerName: author,
+                    ValueListenableBuilder<bool>(
+                      valueListenable: AuthService.instance.signedIn,
+                      builder: (context, signedIn, _) {
+                        return IconButton(
+                          icon: const Icon(Icons.send),
+                          onPressed: signedIn
+                              ? () async {
+                                  final text = _socialInputCtrl.text.trim();
+                                  if (text.isEmpty) return;
+                                  final author = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                                  final post = Post(
+                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                    category: category,
+                                    title: text.length > 40 ? '${text.substring(0, 40)}...' : text,
+                                    description: text,
+                                    isFree: true,
+                                    sellerName: author,
+                                  );
+                                  await PostService.instance.addPost(post);
+                                  _socialInputCtrl.clear();
+                                  setState(() {});
+                                  try {
+                                    if (_listController.hasClients) {
+                                      await _listController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                                    }
+                                  } catch (_) {}
+                                }
+                              : () {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in to post in Scrap Recovery Forms')));
+                                },
                         );
-                        await PostService.instance.addPost(post);
-                        _socialInputCtrl.clear();
-                        setState(() {});
                       },
                     )
                   ]),
@@ -355,27 +278,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
           return listView;
         },
       ),
-      floatingActionButton: category.toLowerCase().contains('social')
-          ? null
-          : FloatingActionButton(
-              onPressed: () async {
-                final priceAllowed = !isScrap;
-                await Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => CreatePostScreen(category: category, priceAllowed: priceAllowed),
-                ));
-                setState(() {});
-              },
-              child: const Icon(Icons.add),
-            ),
     );
   }
 
   String _formatRelative(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.month}/${dt.day}/${dt.year}';
+    final d = DateTime.now().difference(dt);
+    if (d.inSeconds < 60) return '${d.inSeconds}s';
+    if (d.inMinutes < 60) return '${d.inMinutes}m';
+    if (d.inHours < 24) return '${d.inHours}h';
+    return '${d.inDays}d';
   }
 }
