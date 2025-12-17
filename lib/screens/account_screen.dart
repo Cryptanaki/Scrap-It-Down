@@ -48,10 +48,10 @@ class _AccountScreenState extends State<AccountScreen> {
               ValueListenableBuilder<String>(
                 valueListenable: AuthService.instance.displayName,
                 builder: (context, name, _) {
-                  return Text(
-                    name.isNotEmpty ? 'User: $name' : 'User: (not signed in)',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  );
+                      if (name.isNotEmpty) {
+                        return Text('User: $name', style: Theme.of(context).textTheme.titleLarge);
+                      }
+                      return const SizedBox.shrink();
                 },
               ),
               ValueListenableBuilder<bool>(
