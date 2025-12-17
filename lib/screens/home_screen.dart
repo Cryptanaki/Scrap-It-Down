@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'details_screen.dart';
 import 'account_screen.dart';
+import 'package:scrap_it_down/services/services.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +35,27 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Image.asset('assets/icons/app_icon.png', width: 36, height: 36),
         ),
         title: const Text('Scrap It Down', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        actions: _selectedIndex == 2
+            ? [
+                ValueListenableBuilder<bool>(
+                  valueListenable: AuthService.instance.signedIn,
+                  builder: (context, signedIn, _) {
+                    if (!signedIn) return const SizedBox.shrink();
+                    return IconButton(
+                      tooltip: 'Log out',
+                      icon: const Icon(Icons.logout, color: Colors.black),
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await AuthService.instance.signOut();
+                        if (!mounted) return;
+                        setState(() {});
+                        messenger.showSnackBar(const SnackBar(content: Text('Signed out')));
+                      },
+                    );
+                  },
+                ),
+              ]
+            : null,
       ),
       body: _selectedIndex == 0 ? _buildCategories(context) : _pages[_selectedIndex - 1],
       bottomNavigationBar: BottomNavigationBar(
@@ -45,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Marketplace',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.info_outline),
+            icon: Icon(Icons.forum),
             label: 'Social',
           ),
           BottomNavigationBarItem(
