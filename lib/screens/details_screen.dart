@@ -31,8 +31,8 @@ class _DetailsScreenState extends State<DetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final category = widget.title ?? 'Social';
-    // Display title for the Social tab should read "Gold Recovery Forms"
-    final displayTitle = widget.title ?? 'Gold Recovery Forms';
+    // Display title for the Social tab should read "Scrap Recovery Forms"
+    final displayTitle = widget.title ?? 'Scrap Recovery Forms';
     final isScrap = category.toLowerCase().contains('scrap');
 
     return Scaffold(
