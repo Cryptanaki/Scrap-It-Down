@@ -12,6 +12,7 @@ class Post {
   final DateTime createdAt;
   final String sellerName;
   String? buyerName;
+  String? city;
   String status; // 'available','reserved','picked_up'
 
   // Meetup timer fields
@@ -32,6 +33,7 @@ class Post {
     required this.isFree,
     this.price,
     this.imagePath,
+    this.city,
     DateTime? createdAt,
     required this.sellerName,
     this.buyerName,
@@ -56,6 +58,7 @@ class Post {
       'isFree': isFree,
       'price': price,
       'imagePath': imagePath,
+      'city': city,
       'createdAt': createdAt.toIso8601String(),
       'sellerName': sellerName,
       'buyerName': buyerName,
@@ -78,6 +81,7 @@ class Post {
       isFree: m['isFree'] as bool,
       price: m['price'] == null ? null : (m['price'] as num).toDouble(),
       imagePath: m['imagePath'] as String?,
+      city: m['city'] as String?,
       createdAt: DateTime.parse(m['createdAt'] as String),
       sellerName: m['sellerName'] as String? ?? 'Anonymous',
       buyerName: m['buyerName'] as String?,

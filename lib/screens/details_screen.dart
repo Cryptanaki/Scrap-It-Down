@@ -40,13 +40,19 @@ class _DetailsScreenState extends State<DetailsScreen> {
       body: ValueListenableBuilder<List<Post>>(
         valueListenable: PostService.instance.posts,
         builder: (context, postsList, _) {
-          final all = postsList.where((p) => p.category == category).toList();
+            final all = postsList.where((p) => p.category == category).toList();
+            final userCity = AuthService.instance.city.value;
+            final cityPosts = (userCity.isNotEmpty)
+              ? all.where((p) => p.city == userCity).toList()
+              : <Post>[];
+            cityPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            final remainingAll = all.where((p) => !cityPosts.contains(p)).toList();
           if (all.isEmpty) {
             return Center(child: Text('No posts in $category yet.'));
           }
 
           final now = DateTime.now();
-          final sortedByUp = List<Post>.from(all)
+          final sortedByUp = List<Post>.from(remainingAll)
             ..sort((a, b) => b.upvotedBy.length.compareTo(a.upvotedBy.length));
           final top3 = sortedByUp.take(3).toList();
           final top3Ids = top3.map((e) => e.id).toSet();
@@ -62,7 +68,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
               final netB = b.upvotedBy.length - b.downvotedBy.length;
               return netB.compareTo(netA);
             });
-          final posts = [...top3, ...newPosts, ...others];
+          final posts = [...cityPosts, ...top3, ...newPosts, ...others];
 
           final listView = ListView.separated(
             itemCount: posts.length,
@@ -81,7 +87,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                   if (now.difference(p.createdAt) < const Duration(hours: 24))
                     const Padding(
                       padding: EdgeInsets.only(left: 8.0),
-                      child: Chip(label: Text('NEW'), backgroundColor: Colors.redAccent, labelStyle: TextStyle(color: Colors.white, fontSize: 12)),
+                      child: Chip(label: Text('NEW'), backgroundColor: Colors.black, labelStyle: TextStyle(color: Colors.white, fontSize: 12)),
                     ),
                 ]),
                 subtitle: Column(
@@ -101,113 +107,213 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 onTap: () {
                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostSocialScreen(postId: p.id)));
                 },
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Voting controls
-                    IconButton(
-                      icon: Icon(Icons.arrow_upward, color: p.upvotedBy.contains(AuthService.instance.displayName.value) ? Colors.green : null),
-                      onPressed: () async {
-                        final user = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                        await PostService.instance.toggleUpvotePost(p.id, user);
-                        setState(() {});
-                      },
-                      iconSize: 20,
-                    ),
-                    Text('${p.upvotedBy.length - p.downvotedBy.length}'),
-                    IconButton(
-                      icon: Icon(Icons.arrow_downward, color: p.downvotedBy.contains(AuthService.instance.displayName.value) ? Colors.red : null),
-                      onPressed: () async {
-                        final user = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                        await PostService.instance.toggleDownvotePost(p.id, user);
-                        setState(() {});
-                      },
-                      iconSize: 20,
-                    ),
-                    const SizedBox(height: 6),
-                    p.isFree
-                      ? Chip(label: const Text('Free'), backgroundColor: Colors.black, labelStyle: const TextStyle(color: Colors.white))
-                      : Chip(label: Text('\$${p.price?.toStringAsFixed(2) ?? '-'}'), backgroundColor: Colors.black, labelStyle: const TextStyle(color: Colors.white)),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.comment, size: 14),
-                        const SizedBox(width: 4),
-                        Text('${p.comments.length}'),
-                      ]),
-                    ),
-                    PopupMenuButton<String>(
-                      onSelected: (v) async {
-                        final messenger = ScaffoldMessenger.of(context);
-                        final navigator = Navigator.of(context);
-                        if (v == 'edit') {
-                          await navigator.push(MaterialPageRoute(
-                            builder: (_) => CreatePostScreen(category: category, priceAllowed: !isScrap, editPostId: p.id),
-                          ));
-                          if (!mounted) return;
-                          setState(() {});
-                        } else if (v == 'delete') {
-                          await PostService.instance.removePost(p.id);
-                          if (!mounted) return;
-                          messenger.showSnackBar(const SnackBar(content: Text('Post deleted')));
-                          setState(() {});
-                        } else if (v == 'reserve') {
-                          final buyer = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                          await PostService.instance.reservePost(p.id, buyer);
-                          if (!mounted) return;
-                          messenger.showSnackBar(const SnackBar(content: Text('Post reserved')));
-                          setState(() {});
-                        } else if (v == 'start_meetup') {
-                          // Ask for duration
-                          final dur = await showDialog<int>(context: context, builder: (ctx) {
-                            final ctrl = TextEditingController(text: '900');
-                            return AlertDialog(
-                              title: const Text('Meetup duration (seconds)'),
-                              content: TextField(controller: ctrl, keyboardType: TextInputType.number),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.of(ctx).pop<int?>(null), child: const Text('Cancel')),
-                                TextButton(onPressed: () => Navigator.of(ctx).pop<int>(int.tryParse(ctrl.text) ?? 900), child: const Text('Start')),
-                              ],
-                              
-                            );
-                          });
-                          if (dur != null) {
-                            await PostService.instance.startMeetup(p.id, dur);
-                            if (!mounted) return;
-                            messenger.showSnackBar(const SnackBar(content: Text('Meetup started')));
-                            setState(() {});
-                          }
-                        } else if (v == 'mark_picked') {
-                          // Offer seller forgiveness option
-                          final forgive = await showDialog<bool>(context: context, builder: (ctx) {
-                            return AlertDialog(
-                              title: const Text('Seller forgave late pickup?'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(false), child: const Text('No')),
-                                TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(true), child: const Text('Yes')),
-                              ],
-                            );
-                          });
-                          await PostService.instance.markPickedUp(p.id, sellerForgave: forgive ?? false);
-                          if (!mounted) return;
-                          messenger.showSnackBar(const SnackBar(content: Text('Marked picked up')));
-                          setState(() {});
-                        }
-                      },
-                      itemBuilder: (_) {
-                        final me = AuthService.instance.displayName.value;
-                        final isSeller = me.isNotEmpty && me == p.sellerName;
-                        final items = <PopupMenuEntry<String>>[];
-                        items.add(const PopupMenuItem(value: 'edit', child: Text('Edit')));
-                        items.add(const PopupMenuItem(value: 'delete', child: Text('Delete')));
-                        if (p.status == 'available') items.add(const PopupMenuItem(value: 'reserve', child: Text('Reserve')));
-                        if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'start_meetup', child: Text('Start Meetup')));
-                        if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'mark_picked', child: Text('Mark Picked Up')));
-                        return items;
-                      },
-                    ),
-                  ],
-                ),
+                trailing: category.toLowerCase().contains('social')
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Compact voting controls (only for Social)
+                          IconButton(
+                            icon: Icon(Icons.arrow_upward, color: p.upvotedBy.contains(AuthService.instance.displayName.value) ? Colors.green : null),
+                            onPressed: () async {
+                              final user = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                              await PostService.instance.toggleUpvotePost(p.id, user);
+                              setState(() {});
+                            },
+                            iconSize: 20,
+                          ),
+                          Text('${p.upvotedBy.length - p.downvotedBy.length}', style: const TextStyle(fontSize: 12)),
+                          IconButton(
+                            icon: Icon(Icons.arrow_downward, color: p.downvotedBy.contains(AuthService.instance.displayName.value) ? Colors.red : null),
+                            onPressed: () async {
+                              final user = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                              await PostService.instance.toggleDownvotePost(p.id, user);
+                              setState(() {});
+                            },
+                            iconSize: 20,
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (v) async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final navigator = Navigator.of(context);
+                              if (v == 'edit') {
+                                await navigator.push(MaterialPageRoute(
+                                  builder: (_) => CreatePostScreen(category: category, priceAllowed: !isScrap, editPostId: p.id),
+                                ));
+                                if (!mounted) return;
+                                setState(() {});
+                              } else if (v == 'delete') {
+                                await PostService.instance.removePost(p.id);
+                                if (!mounted) return;
+                                messenger.showSnackBar(const SnackBar(content: Text('Post deleted')));
+                                setState(() {});
+                              } else if (v == 'reserve') {
+                                final buyer = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                                await PostService.instance.reservePost(p.id, buyer);
+                                if (!mounted) return;
+                                messenger.showSnackBar(const SnackBar(content: Text('Post reserved')));
+                                setState(() {});
+                              } else if (v == 'start_meetup') {
+                                // Ask for duration
+                                final dur = await showDialog<int>(context: context, builder: (ctx) {
+                                  final ctrl = TextEditingController(text: '900');
+                                  return AlertDialog(
+                                    title: const Text('Meetup duration (seconds)'),
+                                    content: TextField(controller: ctrl, keyboardType: TextInputType.number),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int?>(null), child: const Text('Cancel')),
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int>(int.tryParse(ctrl.text) ?? 900), child: const Text('Start')),
+                                    ],
+                                  );
+                                });
+                                if (dur != null) {
+                                  await PostService.instance.startMeetup(p.id, dur);
+                                  if (!mounted) return;
+                                  messenger.showSnackBar(const SnackBar(content: Text('Meetup started')));
+                                  setState(() {});
+                                }
+                              } else if (v == 'mark_picked') {
+                                // Offer seller forgiveness option
+                                final forgive = await showDialog<bool>(context: context, builder: (ctx) {
+                                  return AlertDialog(
+                                    title: const Text('Seller forgave late pickup?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(false), child: const Text('No')),
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(true), child: const Text('Yes')),
+                                    ],
+                                  );
+                                });
+                                await PostService.instance.markPickedUp(p.id, sellerForgave: forgive ?? false);
+                                if (!mounted) return;
+                                messenger.showSnackBar(const SnackBar(content: Text('Marked picked up')));
+                                setState(() {});
+                              }
+                            },
+                            itemBuilder: (_) {
+                              final me = AuthService.instance.displayName.value;
+                              final isSeller = me.isNotEmpty && me == p.sellerName;
+                              final items = <PopupMenuEntry<String>>[];
+                              items.add(const PopupMenuItem(value: 'edit', child: Text('Edit')));
+                              items.add(const PopupMenuItem(value: 'delete', child: Text('Delete')));
+                              if (p.status == 'available') items.add(const PopupMenuItem(value: 'reserve', child: Text('Reserve')));
+                              items.add(const PopupMenuItem(value: 'message', child: Text('Message seller')));
+                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'start_meetup', child: Text('Start Meetup')));
+                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'mark_picked', child: Text('Mark Picked Up')));
+                              return items;
+                            },
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          p.isFree
+                              ? Chip(label: const Text('Free'), backgroundColor: Colors.black, labelStyle: const TextStyle(color: Colors.white))
+                              : Chip(label: Text('\$${p.price?.toStringAsFixed(2) ?? '-'}'), backgroundColor: Colors.black, labelStyle: const TextStyle(color: Colors.white)),
+                          const SizedBox(height: 8),
+                          PopupMenuButton<String>(
+                            onSelected: (v) async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final navigator = Navigator.of(context);
+                              if (v == 'edit') {
+                                await navigator.push(MaterialPageRoute(
+                                  builder: (_) => CreatePostScreen(category: category, priceAllowed: !isScrap, editPostId: p.id),
+                                ));
+                                if (!mounted) return;
+                                setState(() {});
+                              } else if (v == 'delete') {
+                                await PostService.instance.removePost(p.id);
+                                if (!mounted) return;
+                                messenger.showSnackBar(const SnackBar(content: Text('Post deleted')));
+                                setState(() {});
+                              } else if (v == 'reserve') {
+                                final buyer = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                                await PostService.instance.reservePost(p.id, buyer);
+                                // send a private message to the seller notifying reservation
+                                final msg = Message(
+                                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                  from: buyer,
+                                  to: p.sellerName,
+                                  content: '$buyer reserved your item "${p.title}"',
+                                );
+                                MessagesService.instance.addMessage(msg);
+                                if (!mounted) return;
+                                messenger.showSnackBar(const SnackBar(content: Text('Post reserved')));
+                                setState(() {});
+                              } else if (v == 'message') {
+                                // compose a private message to seller
+                                final controller = TextEditingController();
+                                final sent = await showDialog<bool>(context: context, builder: (ctx) {
+                                  return AlertDialog(
+                                    title: Text('Message ${p.sellerName}'),
+                                    content: TextField(controller: controller, maxLines: 4, decoration: const InputDecoration(hintText: 'Enter message')),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(false), child: const Text('Cancel')),
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(true), child: const Text('Send')),
+                                    ],
+                                  );
+                                });
+                                if (sent == true && controller.text.trim().isNotEmpty) {
+                                  final from = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                                  final m = Message(
+                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                    from: from,
+                                    to: p.sellerName,
+                                    content: controller.text.trim(),
+                                  );
+                                  MessagesService.instance.addMessage(m);
+                                  if (!mounted) return;
+                                  messenger.showSnackBar(const SnackBar(content: Text('Message sent')));
+                                  setState(() {});
+                                }
+                              } else if (v == 'start_meetup') {
+                                final dur = await showDialog<int>(context: context, builder: (ctx) {
+                                  final ctrl = TextEditingController(text: '900');
+                                  return AlertDialog(
+                                    title: const Text('Meetup duration (seconds)'),
+                                    content: TextField(controller: ctrl, keyboardType: TextInputType.number),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int?>(null), child: const Text('Cancel')),
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<int>(int.tryParse(ctrl.text) ?? 900), child: const Text('Start')),
+                                    ],
+                                  );
+                                });
+                                if (dur != null) {
+                                  await PostService.instance.startMeetup(p.id, dur);
+                                  if (!mounted) return;
+                                  messenger.showSnackBar(const SnackBar(content: Text('Meetup started')));
+                                  setState(() {});
+                                }
+                              } else if (v == 'mark_picked') {
+                                final forgive = await showDialog<bool>(context: context, builder: (ctx) {
+                                  return AlertDialog(
+                                    title: const Text('Seller forgave late pickup?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(false), child: const Text('No')),
+                                      TextButton(onPressed: () => Navigator.of(ctx).pop<bool>(true), child: const Text('Yes')),
+                                    ],
+                                  );
+                                });
+                                await PostService.instance.markPickedUp(p.id, sellerForgave: forgive ?? false);
+                                if (!mounted) return;
+                                messenger.showSnackBar(const SnackBar(content: Text('Marked picked up')));
+                                setState(() {});
+                              }
+                            },
+                            itemBuilder: (_) {
+                              final me = AuthService.instance.displayName.value;
+                              final isSeller = me.isNotEmpty && me == p.sellerName;
+                              final items = <PopupMenuEntry<String>>[];
+                              items.add(const PopupMenuItem(value: 'edit', child: Text('Edit')));
+                              items.add(const PopupMenuItem(value: 'delete', child: Text('Delete')));
+                              if (p.status == 'available') items.add(const PopupMenuItem(value: 'reserve', child: Text('Reserve')));
+                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'start_meetup', child: Text('Start Meetup')));
+                              if (isSeller && p.status == 'reserved') items.add(const PopupMenuItem(value: 'mark_picked', child: Text('Mark Picked Up')));
+                              return items;
+                            },
+                          ),
+                        ],
+                      ),
               );
             },
           );

@@ -62,6 +62,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       isFree: isFree,
       price: price,
       imagePath: _imagePath,
+      city: widget.editPostId != null ?
+        (PostService.instance.posts.value.firstWhere((p) => p.id == widget.editPostId, orElse: () => Post(id: '', category: '', title: '', description: '', isFree: true, sellerName: 'Anonymous')).city)
+        : (AuthService.instance.city.value.isNotEmpty ? AuthService.instance.city.value : null),
       sellerName: seller,
     );
 

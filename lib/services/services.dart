@@ -4,3 +4,4 @@ export 'post_service.dart';
 export 'rating_service.dart';
 export 'notification_service.dart';
 export 'firestore_sync_service.dart';
+export 'messages_service.dart';

@@ -14,6 +14,7 @@ class AuthService {
   /// auth, update this notifier based on actual auth events.
   final ValueNotifier<bool> signedIn = ValueNotifier<bool>(false);
   final ValueNotifier<String> displayName = ValueNotifier<String>('');
+  final ValueNotifier<String> city = ValueNotifier<String>('');
 
   /// Call during app startup if you want Auth initialized early.
   Future<void> init() async {
@@ -22,6 +23,7 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       signedIn.value = prefs.getBool('signed_in') ?? false;
       displayName.value = prefs.getString('display_name') ?? '';
+      city.value = prefs.getString('city') ?? '';
     } catch (e) {
       debugPrint('AuthService.init() failed to load prefs: $e');
     }
@@ -48,6 +50,16 @@ class AuthService {
       await prefs.setString('display_name', name);
     } catch (e) {
       debugPrint('Failed to persist display name: $e');
+    }
+  }
+
+  Future<void> setCity(String c) async {
+    city.value = c;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('city', c);
+    } catch (e) {
+      debugPrint('Failed to persist city: $e');
     }
   }
 

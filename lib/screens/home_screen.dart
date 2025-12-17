@@ -28,15 +28,21 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scrap It Down')),
+      appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(6.0),
+          child: Image.asset('assets/icons/app_icon.png', width: 36, height: 36),
+        ),
+        title: const Text('Scrap It Down', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      ),
       body: _selectedIndex == 0 ? _buildCategories(context) : _pages[_selectedIndex - 1],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
+            icon: Icon(Icons.storefront),
+            label: 'Marketplace',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.info_outline),
@@ -53,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildCategories(BuildContext context) {
     final categories = <Map<String, dynamic>>[
-      {'label': 'scrap/Metal', 'icon': Icons.build},
+      {'label': 'scrap/Metal', 'icon': Icons.recycling},
       {'label': 'e-waste', 'icon': Icons.electrical_services},
       {'label': 'Jewelry', 'icon': Icons.diamond},
       {'label': 'Coin', 'icon': Icons.monetization_on},
@@ -73,14 +79,18 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
             child: Card(
+              color: Colors.black,
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(cat['icon'] as IconData, size: 48),
+                  Icon(cat['icon'] as IconData, size: 48, color: Colors.white),
                   const SizedBox(height: 12),
-                  Text(cat['label'] as String, style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    cat['label'] as String,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
+                  ),
                 ],
               ),
             ),
