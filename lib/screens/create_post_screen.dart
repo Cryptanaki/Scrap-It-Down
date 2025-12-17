@@ -80,6 +80,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     final isScrap = widget.category.toLowerCase().contains('scrap');
+    final isJewelry = widget.category.toLowerCase().contains('jewel');
+    final isCoin = widget.category.toLowerCase().contains('coin');
     final isSocial = widget.category.toLowerCase().contains('social');
 
     // If editing, prefill fields from existing post
@@ -146,19 +148,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               ),
               const SizedBox(height: 12),
               if (!isScrap) ...[
-                SwitchListTile(
-                  title: const Text('Post for free'),
-                  value: _isFree,
-                  onChanged: (v) => setState(() => _isFree = v),
-                ),
-                if (!_isFree) ...[
+                // Jewelry and Coin posts are not allowed to be marked free
+                if (!isJewelry && !isCoin) ...[
+                  SwitchListTile(
+                    title: const Text('Post for free'),
+                    value: _isFree,
+                    onChanged: (v) => setState(() => _isFree = v),
+                  ),
+                ],
+                // Show price field when the post is not free, and always require for Jewelry/Coin
+                if ((!_isFree && !isJewelry && !isCoin) || isJewelry || isCoin) ...[
                   TextFormField(
                     controller: _priceC,
                     decoration: const InputDecoration(labelText: 'Price'),
                     keyboardType: TextInputType.numberWithOptions(decimal: true),
                     validator: (v) {
-                      if (_isFree) return null;
-                      if (v == null || v.trim().isEmpty) return 'Enter a price or mark free';
+                      final effectiveFree = (isJewelry || isCoin) ? false : _isFree;
+                      if (effectiveFree) return null;
+                      if (v == null || v.trim().isEmpty) return 'Enter a price';
                       if (double.tryParse(v) == null) return 'Enter a valid number';
                       return null;
                     },
