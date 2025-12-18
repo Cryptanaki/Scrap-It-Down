@@ -15,6 +15,7 @@ class DetailsScreen extends StatefulWidget {
 class _DetailsScreenState extends State<DetailsScreen> {
   late final TextEditingController _socialInputCtrl;
   late final ScrollController _listController;
+  late final TextEditingController _searchCtrl;
   final Set<String> _replying = <String>{};
   final Map<String, TextEditingController> _replyCtrls = {};
   @override
@@ -23,12 +24,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
     PostService.instance.init();
     _socialInputCtrl = TextEditingController();
     _listController = ScrollController();
+    _searchCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _socialInputCtrl.dispose();
     _listController.dispose();
+    _searchCtrl.dispose();
     for (final c in _replyCtrls.values) {
       c.dispose();
     }
@@ -38,22 +41,65 @@ class _DetailsScreenState extends State<DetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final category = widget.title ?? 'Social';
+    final isSocial = category == 'Social';
     // Display title for the Social tab should read "Scrap Recovery Forms"
-    final displayTitle = widget.title ?? 'Scrap Recovery Forms';
+    final displayTitle = isSocial ? 'Scrap Recovery Forms' : category;
 
     return Scaffold(
-      appBar: AppBar(title: Text(displayTitle)),
+      appBar: AppBar(
+        toolbarHeight: 92,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 6.0),
+              child: Text(displayTitle),
+            ),
+            if (isSocial)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  width: 260,
+                  margin: const EdgeInsets.only(top: 8.0),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search posts',
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                      filled: true,
+                      fillColor: Colors.white24,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
       body: ValueListenableBuilder<List<Post>>(
         valueListenable: PostService.instance.posts,
         builder: (context, postsList, _) {
-            final all = postsList.where((p) => p.category == category).toList();
+            var all = postsList.where((p) => p.category == category).toList();
+            final query = _searchCtrl.text.trim().toLowerCase();
+            if (query.isNotEmpty) {
+              all = all.where((p) {
+                final hay = '${p.title} ${p.description} ${p.sellerName} ${p.comments.map((c) => c.text).join(' ')}'.toLowerCase();
+                return hay.contains(query);
+              }).toList();
+            }
             final userCity = AuthService.instance.city.value;
             final cityPosts = (userCity.isNotEmpty)
               ? all.where((p) => p.city == userCity).toList()
               : <Post>[];
             cityPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
             final remainingAll = all.where((p) => !cityPosts.contains(p)).toList();
-          if (all.isEmpty) {
+          if (all.isEmpty && !isSocial) {
             return Center(child: Text('No posts in $category yet.'));
           }
 
@@ -92,7 +138,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
               children: [
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  leading: CircleAvatar(
+                  leading: isSocial ? null : CircleAvatar(
                     backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(26),
                     child: (p.category.toLowerCase().contains('scrap') || p.category.toLowerCase().contains('metal'))
                         ? const Icon(Icons.recycling, color: Colors.white)
@@ -227,47 +273,63 @@ class _DetailsScreenState extends State<DetailsScreen> {
             },
           );
 
-          if (category.toLowerCase().contains('social')) {
+          if (isSocial) {
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Row(children: [
-                    Expanded(child: TextField(controller: _socialInputCtrl, decoration: const InputDecoration(hintText: 'Whats on your mind?'))),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: AuthService.instance.signedIn,
-                      builder: (context, signedIn, _) {
-                        return IconButton(
-                          icon: const Icon(Icons.send),
-                          onPressed: signedIn
-                              ? () async {
-                                  final text = _socialInputCtrl.text.trim();
-                                  if (text.isEmpty) return;
-                                  final author = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
-                                  final post = Post(
-                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                    category: category,
-                                    title: text.length > 40 ? '${text.substring(0, 40)}...' : text,
-                                    description: text,
-                                    isFree: true,
-                                    sellerName: author,
-                                  );
-                                  await PostService.instance.addPost(post);
-                                  _socialInputCtrl.clear();
-                                  setState(() {});
-                                  try {
-                                    if (_listController.hasClients) {
-                                      await _listController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-                                    }
-                                  } catch (_) {}
-                                }
-                              : () {
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in to post in Scrap Recovery Forms')));
-                                },
-                        );
-                      },
-                    )
-                  ]),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 6.0),
+                        child: Text('Text posts only', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _socialInputCtrl,
+                              decoration: const InputDecoration(hintText: 'Whats on your mind?'),
+                            ),
+                          ),
+                          ValueListenableBuilder<bool>(
+                            valueListenable: AuthService.instance.signedIn,
+                            builder: (context, signedIn, _) {
+                              return IconButton(
+                                icon: const Icon(Icons.send),
+                                onPressed: signedIn
+                                    ? () async {
+                                        final text = _socialInputCtrl.text.trim();
+                                        if (text.isEmpty) return;
+                                        final author = AuthService.instance.displayName.value.isNotEmpty ? AuthService.instance.displayName.value : 'Anonymous';
+                                        final post = Post(
+                                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                          category: category,
+                                          title: text.length > 40 ? '${text.substring(0, 40)}...' : text,
+                                          description: text,
+                                          isFree: true,
+                                          sellerName: author,
+                                        );
+                                        await PostService.instance.addPost(post);
+                                        _socialInputCtrl.clear();
+                                        setState(() {});
+                                        try {
+                                          if (_listController.hasClients) {
+                                            await _listController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                                          }
+                                        } catch (_) {}
+                                      }
+                                    : () {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in to post in Scrap Recovery Forms')));
+                                      },
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 const Divider(height: 1),
                 Expanded(child: listView),
