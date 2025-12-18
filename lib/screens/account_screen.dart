@@ -14,6 +14,79 @@ class AccountScreen extends StatefulWidget {
   State<AccountScreen> createState() => _AccountScreenState();
 }
 
+class SignupScreen extends StatefulWidget {
+  const SignupScreen({super.key});
+
+  @override
+  State<SignupScreen> createState() => _SignupScreenState();
+}
+
+class _SignupScreenState extends State<SignupScreen> {
+  late final TextEditingController _signupNameCtrl;
+  late final TextEditingController _signupPassCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _signupNameCtrl = TextEditingController();
+    _signupPassCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _signupNameCtrl.dispose();
+    _signupPassCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Create Account')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextField(
+              controller: _signupNameCtrl,
+              decoration: const InputDecoration(labelText: 'Display name'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _signupPassCtrl,
+              decoration: const InputDecoration(labelText: 'Password'),
+              obscureText: true,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () async {
+                final name = _signupNameCtrl.text.trim();
+                final pass = _signupPassCtrl.text;
+                if (name.isEmpty || pass.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter display name and password')));
+                  return;
+                }
+                // Register but do not sign in; user returns to login to sign in explicitly
+                final ok = await AuthService.instance.register(name, pass);
+                if (ok) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created — please sign in')));
+                  Navigator.of(context).pop();
+                } else {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to create account')));
+                }
+              },
+              child: const Text('Create Account'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AccountScreenState extends State<AccountScreen> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _passwordCtrl;
@@ -42,6 +115,18 @@ class _AccountScreenState extends State<AccountScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Top-centered Sign Up button that opens the separate signup flow
+          Center(
+            child: ElevatedButton(
+              onPressed: () async {
+                await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupScreen()));
+                // after returning, stay on the account tab (login view)
+                setState(() {});
+              },
+              child: const Text('Sign Up'),
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -86,22 +171,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        ElevatedButton(
-                          onPressed: () async {
-                            final name = _nameCtrl.text;
-                            final pass = _passwordCtrl.text;
-                            final ok = await AuthService.instance.signUp(name, pass);
-                            if (ok) {
-                              // reflect sanitized name
-                              _nameCtrl.text = AuthService.instance.displayName.value;
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created and signed in')));
-                              setState(() {});
-                            }
-                          },
-                          child: const Text('Sign Up'),
-                        ),
-                        const SizedBox(width: 8),
+                        // Sign In button remains here; Sign Up moved to top center
                         ElevatedButton(
                           onPressed: () async {
                             final name = _nameCtrl.text;

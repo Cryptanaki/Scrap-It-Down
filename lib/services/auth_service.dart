@@ -52,13 +52,36 @@ class AuthService {
   Future<bool> signUp(String name, String password) async {
     await setDisplayName(name);
     _password.value = password;
-    signedIn.value = true;
+    // Keep existing behavior for backward compatibility: persist credentials
+    // but don't force sign-in in other code paths that prefer explicit login.
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('password', password);
-      await prefs.setBool('signed_in', true);
+      // Note: do not set 'signed_in' here when using register flow.
     } catch (e) {
       debugPrint('Failed to persist sign-up: $e');
+    }
+    // Preserve caller expectations: mark signed-in (legacy callers expect signUp to sign in)
+    signedIn.value = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('signed_in', true);
+    } catch (_) {}
+    return true;
+  }
+
+  /// Register a new local account but do NOT sign the user in.
+  /// This is useful when you want the user to explicitly log in after creating
+  /// credentials (for example: sign-up -> return to login screen flow).
+  Future<bool> register(String name, String password) async {
+    await setDisplayName(name);
+    _password.value = password;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('password', password);
+      // Intentionally do NOT set 'signed_in' here.
+    } catch (e) {
+      debugPrint('Failed to persist registration: $e');
     }
     return true;
   }

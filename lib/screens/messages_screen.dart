@@ -23,7 +23,7 @@ class MessagesScreen extends StatelessWidget {
                 title: Text(m.from),
                 subtitle: Text(m.content, maxLines: 2, overflow: TextOverflow.ellipsis),
                 trailing: Text(_formatRelative(m.createdAt)),
-                tileColor: m.read ? null : Colors.black12,
+                tileColor: m.read ? null : Colors.black26,
                 onTap: () {
                   MessagesService.instance.markRead(m.id);
                   showDialog(

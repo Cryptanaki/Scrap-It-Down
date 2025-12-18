@@ -30,7 +30,7 @@ class ScrapItDownApp extends StatelessWidget {
         appBarTheme: AppBarTheme(backgroundColor: primary, foregroundColor: Colors.white, elevation: 0),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
           selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white70,
+          unselectedItemColor: Colors.black,
           backgroundColor: primary,
         ),
         floatingActionButtonTheme: FloatingActionButtonThemeData(backgroundColor: accent, foregroundColor: Colors.white),

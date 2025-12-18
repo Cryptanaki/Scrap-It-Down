@@ -161,7 +161,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                           child: Image.file(File(p.imagePath!), height: 160, width: double.infinity, fit: BoxFit.cover),
                         ),
                       ],
-                      Text(p.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      if (!isSocial) Text(p.description, maxLines: 2, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 6),
                       Text(_formatRelative(p.createdAt), style: Theme.of(context).textTheme.bodySmall),
                     ],
@@ -283,7 +283,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     children: [
                       const Padding(
                         padding: EdgeInsets.only(bottom: 6.0),
-                        child: Text('Text posts only', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                        child: Text('Text posts only', style: TextStyle(fontSize: 12, color: Colors.black)),
                       ),
                       Row(
                         children: [
