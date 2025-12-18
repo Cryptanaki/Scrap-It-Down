@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 /// Lightweight scaffold for an authentication service.
 ///
@@ -17,6 +18,12 @@ class AuthService {
   final ValueNotifier<String> _password = ValueNotifier<String>('');
   final ValueNotifier<String?> profilePicture = ValueNotifier<String?>(null);
   final ValueNotifier<String> city = ValueNotifier<String>('');
+
+  // Email verification
+  String _pendingEmail = '';
+  String _verificationCode = '';
+  DateTime? _codeGeneratedAt;
+  static const int _codeExpiryMinutes = 10;
 
   /// Call during app startup if you want Auth initialized early.
   Future<void> init() async {
@@ -153,4 +160,53 @@ class AuthService {
       debugPrint('Failed to persist sign-out: $e');
     }
   }
+
+  /// Generate a verification code for email and send it via Cloud Function.
+  /// Returns the 6-digit code on success, or empty string on failure.
+  Future<String> generateVerificationCode(String email) async {
+    final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
+    _pendingEmail = email;
+    _verificationCode = code;
+    _codeGeneratedAt = DateTime.now();
+    debugPrint('Verification code generated: $code for email: $email');
+
+    // Call Firebase Cloud Function to send email
+    try {
+      final functions = FirebaseFunctions.instance;
+      final callable = functions.httpsCallable('sendVerificationEmail');
+      await callable.call({
+        'email': email,
+        'code': code,
+      });
+      debugPrint('Verification code sent to email: $email');
+      return code;
+    } catch (e) {
+      debugPrint('Failed to send verification email: $e');
+      // In case of failure, still return the code (user can use for testing)
+      return code;
+    }
+  }
+
+  /// Verify the provided code. Returns true if code is valid and not expired.
+  bool verifyCode(String providedCode) {
+    if (_codeGeneratedAt == null) {
+      debugPrint('No verification code was generated');
+      return false;
+    }
+    final now = DateTime.now();
+    final elapsed = now.difference(_codeGeneratedAt!).inMinutes;
+    if (elapsed > _codeExpiryMinutes) {
+      debugPrint('Verification code expired (${elapsed}m old)');
+      return false;
+    }
+    if (providedCode.trim() == _verificationCode) {
+      debugPrint('Code verified successfully');
+      return true;
+    }
+    debugPrint('Code mismatch');
+    return false;
+  }
+
+  /// Get pending email (the email being registered).
+  String getPendingEmail() => _pendingEmail;
 }

@@ -24,66 +24,135 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   late final TextEditingController _signupNameCtrl;
   late final TextEditingController _signupPassCtrl;
+  late final TextEditingController _verificationCtrl;
+  bool _showVerification = false;
 
   @override
   void initState() {
     super.initState();
     _signupNameCtrl = TextEditingController();
     _signupPassCtrl = TextEditingController();
+    _verificationCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _signupNameCtrl.dispose();
     _signupPassCtrl.dispose();
+    _verificationCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(title: Text(_showVerification ? 'Verify Email' : 'Create Account')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: _showVerification ? _buildVerificationUI() : _buildSignupUI(),
+      ),
+    );
+  }
+
+  Widget _buildSignupUI() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextField(
+          controller: _signupNameCtrl,
+          decoration: const InputDecoration(labelText: 'Email'),
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _signupPassCtrl,
+          decoration: const InputDecoration(labelText: 'Password'),
+          obscureText: true,
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: () async {
+            final email = _signupNameCtrl.text.trim();
+            final pass = _signupPassCtrl.text;
+            if (email.isEmpty || pass.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter email and password')));
+              return;
+            }
+            // Generate verification code and send via email
+            final code = await AuthService.instance.generateVerificationCode(email);
+            if (code.isNotEmpty) {
+              setState(() {
+                _showVerification = true;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification code sent to your email')));
+            } else {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send verification code')));
+            }
+          },
+          child: const Text('Next'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVerificationUI() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text('Enter the verification code sent to your email', textAlign: TextAlign.center),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _verificationCtrl,
+          decoration: const InputDecoration(labelText: 'Verification Code'),
+          maxLength: 6,
+        ),
+        const SizedBox(height: 16),
+        Row(
           children: [
-            TextField(
-              controller: _signupNameCtrl,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _showVerification = false;
+                    _verificationCtrl.clear();
+                  });
+                },
+                child: const Text('Back'),
+              ),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _signupPassCtrl,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () async {
-                final email = _signupNameCtrl.text.trim();
-                final pass = _signupPassCtrl.text;
-                if (email.isEmpty || pass.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter email and password')));
-                  return;
-                }
-                // Register but do not sign in; user returns to login to sign in explicitly
-                final ok = await AuthService.instance.register(email, pass);
-                if (ok) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created — please sign in')));
-                  Navigator.of(context).pop();
-                } else {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to create account')));
-                }
-              },
-              child: const Text('Create Account'),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () async {
+                  final code = _verificationCtrl.text.trim();
+                  if (code.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter the code')));
+                    return;
+                  }
+                  if (AuthService.instance.verifyCode(code)) {
+                    // Code verified — create account
+                    final email = _signupNameCtrl.text.trim();
+                    final pass = _signupPassCtrl.text;
+                    final ok = await AuthService.instance.register(email, pass);
+                    if (ok) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created — please sign in')));
+                      Navigator.of(context).pop();
+                    } else {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to create account')));
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid or expired code')));
+                  }
+                },
+                child: const Text('Create Account'),
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
