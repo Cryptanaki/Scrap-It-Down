@@ -47,37 +47,34 @@ class AuthService {
     return true;
   }
 
-  /// Create a basic local account with a display name and password.
-  /// The display name will be sanitized by `setDisplayName`.
+  /// Create a basic local account with a username and password.
+  /// NOTE: This legacy method sanitizes the provided `name` as a username
+  /// and signs the user in. Prefer `register(email, password)` for email-based
+  /// account creation where users explicitly sign in after registration.
   Future<bool> signUp(String name, String password) async {
     await setDisplayName(name);
     _password.value = password;
-    // Keep existing behavior for backward compatibility: persist credentials
-    // but don't force sign-in in other code paths that prefer explicit login.
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('password', password);
-      // Note: do not set 'signed_in' here when using register flow.
+      await prefs.setString('email', '');
+      await prefs.setBool('signed_in', true);
     } catch (e) {
       debugPrint('Failed to persist sign-up: $e');
     }
-    // Preserve caller expectations: mark signed-in (legacy callers expect signUp to sign in)
     signedIn.value = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('signed_in', true);
-    } catch (_) {}
     return true;
   }
 
   /// Register a new local account but do NOT sign the user in.
-  /// This is useful when you want the user to explicitly log in after creating
-  /// credentials (for example: sign-up -> return to login screen flow).
+  /// In the new flow `name` is the user's email. This persists email+password
+  /// and requires the user to explicitly sign in afterwards.
   Future<bool> register(String name, String password) async {
-    await setDisplayName(name);
+    final email = name.trim();
     _password.value = password;
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('email', email);
       await prefs.setString('password', password);
       // Intentionally do NOT set 'signed_in' here.
     } catch (e) {
@@ -86,19 +83,20 @@ class AuthService {
     return true;
   }
 
-  /// Sign in with a saved display name (sanitized) and password.
-  /// Returns true if credentials match the persisted ones.
-  Future<bool> signIn(String name, String password) async {
-    final sanitized = name.replaceAll(RegExp(r"\s+"), '');
-    final finalName = sanitized.isEmpty ? '' : (sanitized.startsWith('@') ? sanitized : '@$sanitized');
+  /// Sign in with an email and password. Returns true if credentials match.
+  Future<bool> signIn(String email, String password) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final storedName = prefs.getString('display_name') ?? '';
+      final storedEmail = prefs.getString('email') ?? '';
       final storedPassword = prefs.getString('password') ?? '';
-      if (storedName == finalName && storedPassword == password && finalName.isNotEmpty) {
-        displayName.value = storedName;
+      if (storedEmail == email && storedPassword == password && email.isNotEmpty) {
+        // restore username if set
+        displayName.value = prefs.getString('display_name') ?? '';
         _password.value = storedPassword;
         signedIn.value = true;
+        try {
+          await prefs.setBool('signed_in', true);
+        } catch (_) {}
         return true;
       }
     } catch (e) {

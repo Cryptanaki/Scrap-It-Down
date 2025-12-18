@@ -50,7 +50,8 @@ class _SignupScreenState extends State<SignupScreen> {
           children: [
             TextField(
               controller: _signupNameCtrl,
-              decoration: const InputDecoration(labelText: 'Display name'),
+              decoration: const InputDecoration(labelText: 'Email'),
+              keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 8),
             TextField(
@@ -61,14 +62,14 @@ class _SignupScreenState extends State<SignupScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () async {
-                final name = _signupNameCtrl.text.trim();
+                final email = _signupNameCtrl.text.trim();
                 final pass = _signupPassCtrl.text;
-                if (name.isEmpty || pass.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter display name and password')));
+                if (email.isEmpty || pass.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter email and password')));
                   return;
                 }
                 // Register but do not sign in; user returns to login to sign in explicitly
-                final ok = await AuthService.instance.register(name, pass);
+                final ok = await AuthService.instance.register(email, pass);
                 if (ok) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created — please sign in')));
@@ -95,7 +96,7 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: AuthService.instance.displayName.value);
+    _nameCtrl = TextEditingController(text: '');
     _passwordCtrl = TextEditingController();
     _cityCtrl = TextEditingController(text: AuthService.instance.city.value);
   }
@@ -113,20 +114,28 @@ class _AccountScreenState extends State<AccountScreen> {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           // Top-centered Sign Up button that opens the separate signup flow
           Center(
-            child: ElevatedButton(
-              onPressed: () async {
-                await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupScreen()));
-                // after returning, stay on the account tab (login view)
-                setState(() {});
-              },
-              child: const Text('Sign Up'),
+            child: SizedBox(
+              width: 260,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.green,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: () async {
+                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupScreen()));
+                  // after returning, stay on the account tab (login view)
+                  setState(() {});
+                },
+                child: const Text('Sign Up'),
+              ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -156,28 +165,30 @@ class _AccountScreenState extends State<AccountScreen> {
             valueListenable: AuthService.instance.signedIn,
             builder: (context, signedIn, _) {
               if (!signedIn) {
-                return Column(
-                  children: [
-                    TextField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(labelText: 'Display name'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _passwordCtrl,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                      obscureText: true,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+                return Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Sign In button remains here; Sign Up moved to top center
+                        TextField(
+                          controller: _nameCtrl,
+                          decoration: const InputDecoration(labelText: 'Email'),
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _passwordCtrl,
+                          decoration: const InputDecoration(labelText: 'Password'),
+                          obscureText: true,
+                        ),
+                        const SizedBox(height: 12),
                         ElevatedButton(
                           onPressed: () async {
-                            final name = _nameCtrl.text;
+                            final email = _nameCtrl.text.trim();
                             final pass = _passwordCtrl.text;
-                            final ok = await AuthService.instance.signIn(name, pass);
+                            final ok = await AuthService.instance.signIn(email, pass);
                             if (ok) {
+                              // after successful sign-in restore username into the controller for profile editing
                               _nameCtrl.text = AuthService.instance.displayName.value;
                               if (!mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Signed in')));
@@ -191,12 +202,11 @@ class _AccountScreenState extends State<AccountScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                  ],
+                  ),
                 );
               }
 
-              // Signed in UI: show profile picture and editable display name (sanitized on save)
+              // Signed in UI: show profile picture and editable username (sanitized on save)
               return Column(
                 children: [
                   ValueListenableBuilder<String?>(
@@ -208,6 +218,12 @@ class _AccountScreenState extends State<AccountScreen> {
                         child: pic == null ? const Icon(Icons.person, size: 36) : null,
                       );
                     },
+                  ),
+                  const SizedBox(height: 8),
+                  // Username field (editable when signed in)
+                  TextField(
+                    controller: _nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Username'),
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton(
