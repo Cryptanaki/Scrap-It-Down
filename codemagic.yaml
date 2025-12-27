@@ -39,10 +39,7 @@ workflows:
     publishing:
       # App Store Connect publishing
       app_store_connect:
-        auth:
-          api_key: "$APP_STORE_CONNECT_PRIVATE_KEY"
-          key_id: "$APP_STORE_CONNECT_KEY_ID"
-          issuer_id: "$APP_STORE_CONNECT_ISSUER_ID"
+        auth: integration
         # Submit to TestFlight automatically
         submit_to_testflight: true
         # Optional: auto-submit to App Store review (remove if you want manual control)
