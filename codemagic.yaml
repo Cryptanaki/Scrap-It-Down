@@ -39,7 +39,7 @@ workflows:
     publishing:
       # App Store Connect publishing
       app_store_connect:
-        auth: integration
+        auth: "integration"
         # Submit to TestFlight automatically
         submit_to_testflight: true
         # Optional: auto-submit to App Store review (remove if you want manual control)
