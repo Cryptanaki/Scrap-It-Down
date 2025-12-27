@@ -1,0 +1,49 @@
+workflows:
+  ios-release:
+    name: iOS Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        # Bundle identifier must match what's in Xcode project
+        BUNDLE_ID: "com.cryptanaki.scrapitdown"
+        # App Store Connect API key (add in Codemagic UI under Team integrations)
+        # APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        # APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        # APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
+    scripts:
+      - name: Set up Firebase for iOS
+        script: |
+          # Ensure GoogleService-Info.plist is present for production
+          # If using FlutterFire CLI, run: flutterfire configure --project <prod-project-id> --ios-bundle-id $BUNDLE_ID
+          echo "Checking Firebase iOS config..."
+          ls -la ios/Runner/GoogleService-Info.plist || echo "WARNING: GoogleService-Info.plist not found"
+      - name: Install dependencies
+        script: |
+          flutter pub get
+      - name: Pod install
+        script: |
+          cd ios && pod install
+      - name: Build IPA
+        script: |
+          # Codemagic handles export options when automatic code signing is enabled
+          flutter build ipa --release
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      # App Store Connect publishing
+      app_store_connect:
+        # Submit to TestFlight automatically
+        submit_to_testflight: true
+        # Optional: auto-submit to App Store review (remove if you want manual control)
+        # submit_to_app_store: true
+      email:
+        recipients:
+          - cryptanaki@example.com  # Replace with your email
+        notify:
+          success: true
+          failure: true
