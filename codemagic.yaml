@@ -7,6 +7,8 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      groups:
+        - app_store_connect
       vars:
         # Bundle identifier must match what's in Xcode project
         BUNDLE_ID: "com.cryptanaki.scrapitdown"
@@ -37,6 +39,10 @@ workflows:
     publishing:
       # App Store Connect publishing
       app_store_connect:
+        auth:
+          key_id: $APP_STORE_CONNECT_KEY_ID
+          issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+          key: $APP_STORE_CONNECT_PRIVATE_KEY
         # Submit to TestFlight automatically
         submit_to_testflight: true
         # Optional: auto-submit to App Store review (remove if you want manual control)
