@@ -7,15 +7,9 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      groups:
-        - app_store_connect
       vars:
         # Bundle identifier must match what's in Xcode project
         BUNDLE_ID: "com.cryptanaki.scrapitdown"
-        # App Store Connect API key (add in Codemagic UI under Team integrations)
-        # APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
-        # APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        # APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
     scripts:
       - name: Set up Firebase for iOS
         script: |
@@ -40,10 +34,7 @@ workflows:
       # App Store Connect publishing
       app_store_connect:
         auth: "integration"
-        # Submit to TestFlight automatically
         submit_to_testflight: true
-        # Optional: auto-submit to App Store review (remove if you want manual control)
-        # submit_to_app_store: true
       email:
         recipients:
           - cryptanaki@example.com  # Replace with your email
