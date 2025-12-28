@@ -30,8 +30,28 @@ workflows:
           cd ios && pod install
       - name: Build IPA
         script: |
-          # Codemagic handles export options when automatic code signing is enabled
-          flutter build ipa --release
+          # Configure automatic code signing
+          cd ios
+          xcodebuild -project Runner.xcodeproj \
+            -scheme Runner \
+            -sdk iphoneos \
+            -configuration Release \
+            -allowProvisioningUpdates \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=X89J5L95HQ \
+            archive -archivePath build/Runner.xcarchive
+          
+          # Export IPA
+          xcodebuild -exportArchive \
+            -archivePath build/Runner.xcarchive \
+            -exportPath build/Runner.ipa \
+            -exportOptionsPlist ../exportOptions.plist \
+            -allowProvisioningUpdates
+          
+          # Move to expected location
+          cd ..
+          mkdir -p build/ios/ipa
+          cp ios/build/Runner.ipa/*.ipa build/ios/ipa/
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
