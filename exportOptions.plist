@@ -12,10 +12,5 @@
 	<true/>
 	<key>signingStyle</key>
 	<string>automatic</string>
-	<key>provisioningProfiles</key>
-	<dict>
-		<key>com.cryptanaki.scrapitdown</key>
-		<string>match AppStore com.cryptanaki.scrapitdown</string>
-	</dict>
 </dict>
 </plist>
